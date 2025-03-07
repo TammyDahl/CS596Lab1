@@ -1,0 +1,59 @@
+import requests
+from time import sleep
+from bs4 import BeautifulSoup
+import re
+
+pattern = r'0x[a-fA-F0-9]{40}'
+
+def scrape_block(blocknumber, page_list, max_transactions):
+    total_fee = 0.0
+    count = 0
+    
+    for page in sorted(page_list, reverse=True):  # Start from the last page and work backwards
+        if count >= max_transactions:
+            break
+        
+        api_url = f"https://etherscan.io/txs?block={blocknumber}&p={page}"
+        headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:72.0) Gecko/20100101 Firefox/72.0'}
+        sleep(0.5)
+        response = requests.get(api_url, headers=headers)
+        txs = BeautifulSoup(response.content, 'html.parser').select('table.table-hover tbody tr')
+        
+        for row in reversed(txs):  # Process transactions from bottom to top
+            if count >= max_transactions:
+                break
+            
+            tx = extract_transaction_info(row)
+            if tx:
+                count += 1
+                try:
+                    fee_value = float(tx['fee'].replace(',', ''))  # Remove commas and convert to float
+                    total_fee += fee_value
+                except ValueError:
+                    continue  # Skip transactions with invalid fee format
+    
+    avg_fee = total_fee / count if count > 0 else 0
+    return avg_fee
+
+def extract_transaction_info(tr_element):
+    try:
+        tx_fee = tr_element.select_one('.showTxnFee')
+        tx_fee = tx_fee.text.strip().replace(' ETH', '') if tx_fee else "0"
+        
+        return {'fee': tx_fee}
+    except Exception:
+        return None
+
+if __name__ == "__main__":
+    # Block 15479087 has 3 pages, last page has 25 transactions, so take all of page 3 and first 25 of page 2
+    avg_fee_15479087 = scrape_block(15479087, [3, 2, 1], 50)
+    
+    # Block 15479088 has 6 pages, last page has 14 transactions, so take all of page 6 and first 36 of page 5
+    avg_fee_15479088 = scrape_block(15479088, [6, 5, 4, 3, 2, 1], 50)
+    
+    total_avg_fee = (avg_fee_15479087 + avg_fee_15479088) / 2
+    
+    print(f"\nAverage Transaction Fee for First 50 Blocks of 15479087: {avg_fee_15479087:.8f} ETH")
+    print(f"Average Transaction Fee for First 50 Blocks of 15479088: {avg_fee_15479088:.8f} ETH")
+    print(f"Total Average Transaction Fee for all 100 blocks: {total_avg_fee:.8f} ETH")
+

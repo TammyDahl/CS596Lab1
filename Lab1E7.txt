@@ -1,0 +1,32 @@
+import requests
+from time import sleep
+from bs4 import BeautifulSoup
+
+def scrape_block_for_approve(blocknumber, total_pages):
+    approve_count = 0
+    
+    for page in range(1, total_pages + 1):
+        api_url = f"https://etherscan.io/txs?block={blocknumber}&p={page}"
+        headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:72.0) Gecko/20100101 Firefox/72.0'}
+        sleep(0.5)
+        response = requests.get(api_url, headers=headers)
+        soup = BeautifulSoup(response.content, 'html.parser')
+        txs = soup.select('table.table-hover tbody tr')
+        
+        for row in txs:
+            tx_method = extract_transaction_method(row)
+            if tx_method and "Approve" in tx_method:  
+                approve_count += 1
+    
+    return approve_count
+
+def extract_transaction_method(tr_element):
+    try:
+        method_element = tr_element.select_one('td:nth-child(3)') 
+        return method_element.text.strip() if method_element else ""
+    except Exception:
+        return ""
+
+if __name__ == "__main__":
+    approve_count_15479087 = scrape_block_for_approve(15479087, 3)
+    print(f"Number of Transactions Calling 'Approve' in Block 15479087: {approve_count_15479087}")
